@@ -1,0 +1,145 @@
+.section ".data"
+ancho:          .word 10
+alto:           .word 5
+
+snake_x:        .word 3
+snake_y:        .word 2
+dir_x:          .word 1
+dir_y:          .word 0
+food_x:         .word 7
+food_y:         .word 2
+
+char_borde:     .byte '#'
+char_vacio:     .byte ' '
+char_snake:     .byte '@'
+char_food:      .byte '*'
+clear_seq:      .asciiz "\x1B[2J\x1B[H"
+
+.section ".text"
+addi $sp, $zero, 0xFFC
+addi $s2, $zero, -0x100
+
+game_loop:
+    // Limpiar pantalla y reposicionar cursor
+    orh  $a0, $zero, .hi16 clear_seq
+    ori  $a0, $a0, .lo16 clear_seq
+    jal  imprimir_cadena
+
+    addi $s0, $zero, 0
+
+bucle_filas:
+    lw   $t0, alto($zero)
+    addi $t0, $t0, 1
+    blt  $s0, $t0, bucle_filas_ok
+    j    fin_dibujar_mapa
+
+bucle_filas_ok:
+    addi $s1, $zero, 0
+
+bucle_columnas:
+    lw   $t1, ancho($zero)
+    addi $t1, $t1, 1
+    blt  $s1, $t1, bucle_cols_ok
+    j    fin_fila
+
+bucle_cols_ok:
+    // Bordes verticales
+    beq  $zero, $s0, print_borde
+    lw   $t0, alto($zero)
+    addi $t0, $t0, 1
+    beq  $t0, $s0, print_borde
+
+    // Bordes horizontales
+    beq  $zero, $s1, print_borde
+    lw   $t1, ancho($zero)
+    addi $t1, $t1, 1
+    beq  $t1, $s1, print_borde
+
+    // Dibujar serpiente
+    lw   $t2, snake_x($zero)
+    lw   $t3, snake_y($zero)
+    bne  $t2, $s1, check_food
+    bne  $t3, $s0, check_food
+    lbu  $a0, char_snake($zero)
+    jal  imprimir_char
+    j    siguiente_col
+
+check_food:
+    // Dibujar comida
+    lw   $t4, food_x($zero)
+    lw   $t5, food_y($zero)
+    bne  $t4, $s1, print_espacio
+    bne  $t5, $s0, print_espacio
+    lbu  $a0, char_food($zero)
+    jal  imprimir_char
+    j    siguiente_col
+
+print_borde:
+    lbu  $a0, char_borde($zero)
+    jal  imprimir_char
+    j    siguiente_col
+
+print_espacio:
+    lbu  $a0, char_vacio($zero)
+    jal  imprimir_char
+
+siguiente_col:
+    addi $s1, $s1, 1
+    j    bucle_columnas
+
+fin_fila:
+    // Retorno de carro y salto de linea
+    addi $a0, $zero, '\r'
+    jal  imprimir_char
+    addi $a0, $zero, '\n'
+    jal  imprimir_char
+
+    addi $s0, $s0, 1
+    j    bucle_filas
+
+fin_dibujar_mapa:
+    // Logica de movimiento
+    lw   $t0, snake_x($zero)
+    lw   $t1, dir_x($zero)
+    add  $t0, $t0, $t1
+    sw   $t0, snake_x($zero)
+
+    // Teletransporte si toca la pared derecha
+    lw   $t2, ancho($zero)
+    blt  $t0, $t2, delay
+    addi $t3, $zero, 1
+    sw   $t3, snake_x($zero)
+
+delay:
+    // Control de velocidad
+    addi $t5, $zero, 30000
+
+delay_bucle:
+    addi $t5, $t5, -1
+    bne  $zero, $t5, delay_bucle
+
+    j    game_loop
+
+// ------------------------------------
+// Rutinas auxiliares de impresion
+// ------------------------------------
+imprimir_char:
+    sb   $a0, 0($s2)
+    jr   $ra, 0
+
+imprimir_cadena:
+    addi $sp, $sp, -4
+    sw   $s4, 0($sp)
+    addi $s4, $a0, 0
+
+imprimir_cadena_bucle:
+    lbu  $t4, 0($s4)
+    beq  $zero, $t4, imprimir_cadena_fin
+    sb   $t4, 0($s2)
+    addi $s4, $s4, 1
+    j    imprimir_cadena_bucle
+
+imprimir_cadena_fin:
+    lw   $s4, 0($sp)
+    addi $sp, $sp, 4
+    jr   $ra, 0
